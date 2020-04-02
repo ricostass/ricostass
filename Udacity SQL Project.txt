@@ -1,0 +1,97 @@
+/*Question 1: How do the two stores compare in total rentals per month*/
+
+SELECT date_part('MONTH', r.rental_date) AS rental_month, 
+date_part('YEAR', r.rental_date) AS rental_year, 
+sto.store_id, 
+COUNT(*) AS count_rentals
+FROM rental r
+JOIN staff sta
+ON r.staff_id = sta.staff_id
+JOIN store sto
+ON sta.store_id = sto.store_id
+GROUP BY 1,2,3
+ORDER BY 4 DESC
+;
+
+/*Question 2: Who are the top 10 paying customers by name and how much did they pay per month?*/
+
+WITH top_ten AS(
+  SELECT 
+  p.customer_id,
+  (c.first_name || ' ' || c.last_name) AS  customer_name, 
+  SUM(p.amount) AS pay_amount
+FROM customer c
+JOIN payment p
+ON c.customer_id = p.customer_id
+GROUP BY 1,2
+ORDER BY 3 DESC
+LIMIT 10)
+
+SELECT date_trunc('MONTH', p.payment_date) AS pay_month,
+tt.customer_name AS fullname,
+COUNT(*) AS pay_countpermon,
+SUM(p.amount) as pay_amount
+FROM payment p
+JOIN top_ten tt
+ON p.customer_id = tt.customer_id
+GROUP BY 1,2
+ORDER BY 2;
+
+/*Question 3: What are the top and least rented (in-demand) genres and what are what are their total sales?*/
+/*category,film_category,film, rental, payment*/
+
+WITH rcg AS (
+	SELECT c.name AS genre, 			
+	COUNT(*) as rent_demand
+	FROM category c
+	JOIN film_category fc
+	ON c.category_id = fc.category_id
+	JOIN film  f
+	ON fc.film_id = f.film_id
+	JOIN inventory i
+	ON f.film_id = i.film_id
+	JOIN rental r
+	ON i.inventory_id =  r.inventory_id
+	JOIN payment p
+	ON r.rental_id = p.rental_id
+	GROUP BY 1
+	ORDER BY 2 DESC),
+ts AS(
+  	SELECT c.name AS genre, 				SUM(p.amount) AS total_sales
+	FROM category c
+	JOIN film_category fc
+	ON c.category_id = fc.category_id
+	JOIN film  f
+	ON fc.film_id = f.film_id
+	JOIN inventory i
+	ON f.film_id = i.film_id
+	JOIN rental r
+	ON i.inventory_id =  r.inventory_id
+	JOIN payment p
+	ON r.rental_id = p.rental_id
+	GROUP BY 1
+	ORDER BY 2 DESC)
+
+SELECT rcg.genre, rcg.rent_demand, ts.total_sales
+FROM rcg
+JOIN ts
+ON rcg.genre = ts.genre
+;
+
+/* Question 4: What is the rental duration for family-friendly movie categories?*/
+
+WITH family_category AS (
+  SELECT f.title AS film_title, c.name AS category_name, f.rental_duration , NTILE(4) OVER (ORDER BY f.rental_duration) AS standard_quartile
+  FROM film f
+  JOIN film_category fc
+  ON f.film_id = fc.film_id
+  JOIN category c
+  ON fc.category_id = c.category_id
+  WHERE c.name IN ('Animation', 'Children', 'Classics', 'Comedy', 'Family', 'Music'))
+  
+SELECT category_name, 
+standard_quartile,
+COUNT(*)
+FROM family_category
+GROUP BY 1, 2
+ORDER BY 1, 2;
